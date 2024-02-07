@@ -1,0 +1,87 @@
+@page "/fileupload"
+@using System.IO
+@using Microsoft.AspNetCore.Components.Forms
+@inject BlobStorageService blobStorageService
+
+<PageTitle>File Upload</PageTitle>
+
+<h1>File Upload</h1>
+
+<p>Upload file(s) to the blob container.</p>
+
+<InputFile class="form-control mb-3" @ref="fileInput" multiple OnChange="HandleFileSelection" />
+<button class="btn btn-primary mt-2" @onclick="UploadFiles">Upload</button>
+<p class="text-danger mt-3">@errorMessage</p>
+
+@if (uploadInProgress)
+{
+    <p class="mt-3">Uploading... @uploadProgress%</p>
+}
+
+@if (uploadSuccess)
+{
+    <p class="text-success mt-3">Upload successful!</p>
+}
+
+@code {
+    [Inject]
+    private IConfiguration Configuration { get; set; }
+    private InputFile fileInput;
+    private bool uploadInProgress = false;
+    private bool uploadSuccess = false;
+    private int uploadProgress = 0;
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    private string containerName { get; set; }
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"];
+    }
+
+    private void HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        selectedFiles.Clear();
+        foreach (var file in e.GetMultipleFiles())
+        {
+            selectedFiles.Add(file);
+        }
+    }
+
+    private async Task UploadFiles()
+    {
+        if (selectedFiles.Count == 0)
+        {
+            errorMessage = "Please select a file.";
+            return;
+        }
+
+        uploadInProgress = true;
+        errorMessage = "";
+
+        var totalSize = selectedFiles.Sum(file => file.Size);
+        long uploadedBytes = 0;
+
+        foreach (var file in selectedFiles)
+        {
+            // Check if file already exists
+            var blobExists = await blobStorageService.BlobExists(containerName, file.Name);
+            if (blobExists)
+            {
+                errorMessage = $"File '{file.Name}' already exists and cannot be overwritten.";
+                uploadInProgress = false;
+                return;
+            }
+
+            using (var stream = file.OpenReadStream())
+            {
+                await blobStorageService.UploadFileAsync(containerName, file.Name, stream);
+                uploadedBytes += file.Size;
+                uploadProgress = (int)(((double)uploadedBytes / totalSize) * 100);
+            }
+        }
+
+        uploadInProgress = false;
+        uploadSuccess = true;
+    }
+}

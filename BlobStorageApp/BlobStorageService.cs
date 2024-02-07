@@ -34,6 +34,19 @@ public class BlobStorageService
 
         return blobInfos;
     }
+    public async Task UploadFileAsync(string containerName, string blobName, Stream stream)
+    {
+        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+        var blobClient = containerClient.GetBlobClient(blobName);
+        await blobClient.UploadAsync(stream, true);
+    }
+
+    public async Task<bool> BlobExists(string containerName, string blobName)
+    {
+        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+        var blobClient = containerClient.GetBlobClient(blobName);
+        return await blobClient.ExistsAsync();
+    }
 }
 
 public class BlobInfo
