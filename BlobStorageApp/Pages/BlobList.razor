@@ -1,0 +1,66 @@
+@page "/bloblist"
+@using System.Collections.Generic
+@using System.Threading.Tasks
+
+<PageTitle>List of Blobs</PageTitle>
+
+<h1>List of Blobs</h1>
+
+<p>The table lists all blobs stored in the container.</p>
+
+<ErrorBoundary>
+    <ChildContent>
+        @if (BlobInfos == null)
+        {
+            <p>Loading...</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Size (bytes)</th>
+                        <th>Last Modified</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var blobInfo in BlobInfos)
+                    {
+                        <tr>
+                            <td>@blobInfo.Name</td>
+                            <td>@blobInfo.Size</td>
+                            <td>@blobInfo.LastModified</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+    <ErrorContent>
+        <p class="errorUI">😈 A rotten gremlin got us. Sorry!</p>
+    </ErrorContent>
+</ErrorBoundary>
+
+
+@code {
+    [Inject]
+    private IConfiguration Configuration { get; set; }
+    private List<BlobInfo>? BlobInfos { get; set; }
+
+    private string storageAccountName { get; set; }
+    private string containerName { get; set; }
+
+    protected override void OnInitialized()
+    {
+        storageAccountName = Configuration["AZURE_STORAGE_ACCOUNT_NAME"];
+        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"];
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var blobStorageService = new BlobStorageService(storageAccountName);
+        BlobInfos = await blobStorageService.ListBlobsAsync(containerName);
+    }
+}
