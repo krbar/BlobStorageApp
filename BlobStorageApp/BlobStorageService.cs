@@ -8,7 +8,12 @@ public class BlobStorageService
 
     public BlobStorageService(string storageAccountName)
     {
-        var credential = new DefaultAzureCredential();
+        var clientId = Environment.GetEnvironmentVariable("ManagedIdentityClientId")
+            ?? throw new InvalidOperationException("Configuration value 'ManagedIdentityClientId' is missing.");
+        var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
+        {
+            ManagedIdentityClientId = clientId
+        });
         _blobServiceClient = new BlobServiceClient(new Uri($"https://{storageAccountName}.blob.core.windows.net"), credential);
     }
 
