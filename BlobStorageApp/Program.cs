@@ -12,7 +12,8 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnC
                     .AddEnvironmentVariables();
 
 // Register BlobStorageService with Managed Identity
-var storageAccountName = builder.Configuration["AZURE_STORAGE_ACCOUNT_NAME"];; // Replace with your storage account name
+var storageAccountName = builder.Configuration["AZURE_STORAGE_ACCOUNT_NAME"]
+                         ?? throw new InvalidOperationException("Configuration value 'AZURE_STORAGE_ACCOUNT_NAME' is missing.");
 builder.Services.AddScoped(sp => new BlobStorageService(storageAccountName));
 
 var app = builder.Build();
