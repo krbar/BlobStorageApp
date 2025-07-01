@@ -1,4 +1,5 @@
 @page "/fileupload"
+@using System
 @using System.IO
 @using Microsoft.AspNetCore.Components.Forms
 @inject BlobStorageService blobStorageService
@@ -25,18 +26,20 @@
 
 @code {
     [Inject]
-    private IConfiguration Configuration { get; set; }
-    private InputFile fileInput;
+    private IConfiguration Configuration { get; set; } = default!;
+    private InputFile? fileInput;
     private bool uploadInProgress = false;
     private bool uploadSuccess = false;
     private int uploadProgress = 0;
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
-    private string containerName { get; set; }
+    private string containerName { get; set; } = string.Empty;
     private string errorMessage = "";
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
-        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"];
+        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"]
+            ?? throw new InvalidOperationException("AZURE_STORAGE_CONTAINER_NAME is not configured.");
+        return Task.CompletedTask;
     }
 
     private void HandleFileSelection(InputFileChangeEventArgs e)

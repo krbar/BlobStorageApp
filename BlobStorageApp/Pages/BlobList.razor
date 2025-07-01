@@ -45,17 +45,18 @@
 
 @code {
     [Inject]
-    private IConfiguration Configuration { get; set; }
+    private IConfiguration Configuration { get; set; } = default!;
     private List<BlobInfo>? BlobInfos { get; set; }
 
-    private string storageAccountName { get; set; }
-    private string containerName { get; set; }
+    // Provide default values to satisfy non-nullable reference type rules
+    private string storageAccountName { get; set; } = string.Empty;
+    private string containerName { get; set; } = string.Empty;
 
     protected override void OnInitialized()
     {
-        storageAccountName = Configuration["AZURE_STORAGE_ACCOUNT_NAME"];
-        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"];
-
+        // Ensure we never assign a null value to non-nullable fields
+        storageAccountName = Configuration["AZURE_STORAGE_ACCOUNT_NAME"] ?? string.Empty;
+        containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"] ?? string.Empty;
     }
 
     protected override async Task OnInitializedAsync()
