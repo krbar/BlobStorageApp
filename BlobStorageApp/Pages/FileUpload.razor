@@ -2,6 +2,7 @@
 @using System
 @using System.IO
 @using Microsoft.AspNetCore.Components.Forms
+@using Azure
 @inject BlobStorageService blobStorageService
 
 <PageTitle>File Upload</PageTitle>
@@ -25,11 +26,35 @@
         <text>Upload</text>
     }
 </button>
-<p class="text-danger mt-3">@errorMessage</p>
 
 @if (uploadInProgress)
 {
-    <p class="mt-3">Uploading... @uploadProgress%</p>
+    <button class="btn btn-secondary mt-2 ms-2" @onclick="CancelUpload">Cancel</button>
+}
+<p class="text-danger mt-3">@errorMessage</p>
+
+@if (!string.IsNullOrEmpty(errorMessage) && errorMessage.Contains("\n"))
+{
+    <div class="alert alert-warning mt-3" role="alert">
+        @foreach (var line in errorMessage.Split('\n'))
+        {
+            @if (!string.IsNullOrWhiteSpace(line))
+            {
+                <div>@line</div>
+            }
+        }
+    </div>
+}
+
+@if (uploadInProgress)
+{
+    <div class="mt-3">
+        <p>Uploading... @uploadProgress%</p>
+        @if (!string.IsNullOrEmpty(currentlyUploadingFile))
+        {
+            <p class="text-muted small">Currently uploading: @currentlyUploadingFile</p>
+        }
+    </div>
 }
 
 @if (uploadSuccess)
@@ -48,6 +73,8 @@
     private string containerName { get; set; } = string.Empty;
     private string errorMessage = "";
     private long maxFileSizeBytes = 100 * 1024 * 1024; // Default 100 MB
+    private CancellationTokenSource? cancellationTokenSource;
+    private string currentlyUploadingFile = "";
 
     protected override Task OnInitializedAsync()
     {
@@ -86,32 +113,129 @@
         }
 
         uploadInProgress = true;
+        uploadSuccess = false;
         errorMessage = "";
+        uploadProgress = 0;
+        
+        // Create cancellation token for upload operations
+        cancellationTokenSource = new CancellationTokenSource();
 
         var totalSize = selectedFiles.Sum(file => file.Size);
         long uploadedBytes = 0;
+        var failedUploads = new List<string>();
+        var successfulUploads = new List<string>();
 
-        foreach (var file in selectedFiles)
+        try
         {
-            // Check if file already exists
-            var blobExists = await blobStorageService.BlobExists(containerName, file.Name);
-            if (blobExists)
+            foreach (var file in selectedFiles)
             {
-                errorMessage = $"File '{file.Name}' already exists and cannot be overwritten.";
-                uploadInProgress = false;
-                return;
+                // Check for cancellation
+                if (cancellationTokenSource.Token.IsCancellationRequested)
+                {
+                    errorMessage = "Upload cancelled by user.";
+                    break;
+                }
+
+                // Update currently uploading file display
+                currentlyUploadingFile = file.Name;
+                StateHasChanged();
+
+                try
+                {
+                    // Validate file before processing
+                    if (file.Size == 0)
+                    {
+                        failedUploads.Add($"{file.Name} (empty file)");
+                        continue;
+                    }
+
+                    // Check if file already exists
+                    var blobExists = await blobStorageService.BlobExists(containerName, file.Name);
+                    if (blobExists)
+                    {
+                        failedUploads.Add($"{file.Name} (already exists)");
+                        continue;
+                    }
+
+                    // Upload the file with error handling
+                    using (var stream = file.OpenReadStream(maxAllowedSize: maxFileSizeBytes))
+                    {
+                        await blobStorageService.UploadFileAsync(containerName, file.Name, stream, cancellationTokenSource.Token);
+                        uploadedBytes += file.Size;
+                        uploadProgress = (int)(((double)uploadedBytes / totalSize) * 100);
+                        successfulUploads.Add(file.Name);
+                        StateHasChanged(); // Force UI update for progress
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    errorMessage = "Upload cancelled by user.";
+                    break;
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("maximum allowed size"))
+                {
+                    failedUploads.Add($"{file.Name} (file too large)");
+                }
+                catch (IOException ex)
+                {
+                    failedUploads.Add($"{file.Name} (file access error: {ex.Message})");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    failedUploads.Add($"{file.Name} (access denied)");
+                }
+                catch (RequestFailedException ex)
+                {
+                    failedUploads.Add($"{file.Name} (Azure error: {ex.Status} - {ex.ErrorCode})");
+                }
+                catch (Exception ex)
+                {
+                    failedUploads.Add($"{file.Name} (unexpected error: {ex.Message})");
+                }
             }
 
-            using (var stream = file.OpenReadStream(maxAllowedSize: maxFileSizeBytes))
+            // Set final status and message (only if not cancelled)
+            if (!cancellationTokenSource.Token.IsCancellationRequested && string.IsNullOrEmpty(errorMessage))
             {
-                await blobStorageService.UploadFileAsync(containerName, file.Name, stream);
-                uploadedBytes += file.Size;
-                uploadProgress = (int)(((double)uploadedBytes / totalSize) * 100);
-                StateHasChanged(); // Force UI update for progress
+                if (failedUploads.Count == 0)
+                {
+                    uploadSuccess = true;
+                    errorMessage = "";
+                }
+                else if (successfulUploads.Count == 0)
+                {
+                    uploadSuccess = false;
+                    errorMessage = $"All uploads failed:\n• {string.Join("\n• ", failedUploads)}";
+                }
+                else
+                {
+                    uploadSuccess = true;
+                    errorMessage = $"Partial success - {successfulUploads.Count} uploaded, {failedUploads.Count} failed:\n• {string.Join("\n• ", failedUploads)}";
+                }
             }
         }
+        catch (OperationCanceledException)
+        {
+            errorMessage = "Upload cancelled by user.";
+        }
+        catch (Exception ex)
+        {
+            uploadSuccess = false;
+            errorMessage = $"Upload process failed: {ex.Message}";
+        }
+        finally
+        {
+            uploadInProgress = false;
+            currentlyUploadingFile = "";
+            uploadProgress = uploadSuccess && failedUploads.Count == 0 ? 100 : uploadProgress;
+            cancellationTokenSource?.Dispose();
+            cancellationTokenSource = null;
+            StateHasChanged();
+        }
+    }
 
-        uploadInProgress = false;
-        uploadSuccess = true;
+    private void CancelUpload()
+    {
+        cancellationTokenSource?.Cancel();
     }
 }

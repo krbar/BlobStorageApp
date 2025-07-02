@@ -39,7 +39,7 @@ public class BlobStorageService
 
         return blobInfos;
     }
-    public async Task UploadFileAsync(string containerName, string blobName, Stream stream)
+    public async Task UploadFileAsync(string containerName, string blobName, Stream stream, CancellationToken cancellationToken = default)
     {
         var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
         var blobClient = containerClient.GetBlobClient(blobName);
@@ -57,12 +57,12 @@ public class BlobStorageService
                     MaximumTransferSize = 4 * 1024 * 1024  // 4 MB maximum transfer size per operation
                 }
             };
-            await blobClient.UploadAsync(stream, uploadOptions);
+            await blobClient.UploadAsync(stream, uploadOptions, cancellationToken);
         }
         else
         {
             // Use simple upload for smaller files
-            await blobClient.UploadAsync(stream, overwrite: true);
+            await blobClient.UploadAsync(stream, overwrite: true, cancellationToken);
         }
     }
 
