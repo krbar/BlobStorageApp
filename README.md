@@ -34,11 +34,11 @@ dotnet build .\BlobStorageApp.sln
 dotnet publish -c Release
 ````
 
-### Deploy the app
+### Deploy the app (Powershell)
 
 ```pwsh
 # zip the published files
 Compress-Archive -Path .\BlobStorageApp\bin\Release\net9.0\publish\* -DestinationPath .\app.zip -Force
 # deploy to Azure App Service
-Publish-AzWebApp -ArchivePath .\app.zip -ResourceGroupName <ResourceGroupName> -Name <AppServiceName> -Force
+Publish-AzWebApp -ArchivePath .\app.zip -ResourceGroupName '<ResourceGroupName>' -Name '<AppServiceName>' -Force
 ````
