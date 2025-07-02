@@ -4,6 +4,20 @@ This simple app demonstrates uploading files to Azure Blob Storage and listing t
 
 > Note: The app is intended for demo purposes only and not for production use.
 
+## Screenshots  
+
+### Home
+
+![Home](doc/BlobStorageApp-Home.png)
+
+### Upload form
+
+![Upload form](doc/BlobStorageApp-Upload.png)
+
+### Container listing
+
+![Blob list](doc/BlobStorageApp-List.png)
+
 ## Configuration
 
 ### Environment Variables
