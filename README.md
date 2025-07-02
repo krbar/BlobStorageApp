@@ -20,3 +20,25 @@ Ensure that the managed identity has the following permissions on the Azure Stor
 
 - `Reader` on the Storage Account: This role allows the app to read the storage account properties.
 - `Storage Blob Data Contributor` on the Blob Container: This role allows the app to read and upload files to the specified blob container.
+
+## Build and deploy
+
+### Pre-requisites
+
+- [.NET SDK](https://dotnet.microsoft.com/download) (version 9.0 or later)
+
+### Build the app
+
+```pwsh
+dotnet build .\BlobStorageApp.sln
+dotnet publish -c Release
+````
+
+### Deploy the app
+
+```pwsh
+# zip the published files
+Compress-Archive -Path .\BlobStorageApp\bin\Release\net9.0\publish\* -DestinationPath .\app.zip -Force
+# deploy to Azure App Service
+Publish-AzWebApp -ArchivePath .\app.zip -ResourceGroupName <ResourceGroupName> -Name <AppServiceName> -Force
+````
