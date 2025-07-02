@@ -9,9 +9,22 @@
 <h1>File Upload</h1>
 
 <p>Upload file(s) to the blob container.</p>
+<div class="alert alert-info" role="alert">
+    <strong>Maximum file size:</strong> @(Configuration.GetValue<int>("FileUpload:MaxFileSizeMB", 100)) MB per file
+</div>
 
 <InputFile class="form-control mb-3" @ref="fileInput" multiple OnChange="HandleFileSelection" />
-<button class="btn btn-primary mt-2" @onclick="UploadFiles">Upload</button>
+<button class="btn btn-primary mt-2" @onclick="UploadFiles" disabled="@uploadInProgress">
+    @if (uploadInProgress)
+    {
+        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+        <text>Uploading...</text>
+    }
+    else
+    {
+        <text>Upload</text>
+    }
+</button>
 <p class="text-danger mt-3">@errorMessage</p>
 
 @if (uploadInProgress)
@@ -34,19 +47,32 @@
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
     private string containerName { get; set; } = string.Empty;
     private string errorMessage = "";
+    private long maxFileSizeBytes = 100 * 1024 * 1024; // Default 100 MB
 
     protected override Task OnInitializedAsync()
     {
         containerName = Configuration["AZURE_STORAGE_CONTAINER_NAME"]
             ?? throw new InvalidOperationException("AZURE_STORAGE_CONTAINER_NAME is not configured.");
+        
+        maxFileSizeBytes = Configuration.GetValue<long>("FileUpload:MaxFileSizeBytes", 100 * 1024 * 1024);
+        
         return Task.CompletedTask;
     }
 
     private void HandleFileSelection(InputFileChangeEventArgs e)
     {
         selectedFiles.Clear();
-        foreach (var file in e.GetMultipleFiles())
+        uploadSuccess = false;
+        errorMessage = "";
+        
+        foreach (var file in e.GetMultipleFiles(int.MaxValue))
         {
+            if (file.Size > maxFileSizeBytes)
+            {
+                var maxFileSizeMB = Configuration.GetValue<int>("FileUpload:MaxFileSizeMB", 100);
+                errorMessage = $"File '{file.Name}' exceeds the maximum size limit of {maxFileSizeMB} MB.";
+                return;
+            }
             selectedFiles.Add(file);
         }
     }
@@ -76,11 +102,12 @@
                 return;
             }
 
-            using (var stream = file.OpenReadStream())
+            using (var stream = file.OpenReadStream(maxAllowedSize: maxFileSizeBytes))
             {
                 await blobStorageService.UploadFileAsync(containerName, file.Name, stream);
                 uploadedBytes += file.Size;
                 uploadProgress = (int)(((double)uploadedBytes / totalSize) * 100);
+                StateHasChanged(); // Force UI update for progress
             }
         }
 

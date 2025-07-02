@@ -43,7 +43,27 @@ public class BlobStorageService
     {
         var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
         var blobClient = containerClient.GetBlobClient(blobName);
-        await blobClient.UploadAsync(stream, true);
+        
+        // For files larger than 100MB, use parallel uploads for better performance
+        if (stream.Length >= 100 * 1024 * 1024) // 100 MB
+        {
+            var uploadOptions = new BlobUploadOptions
+            {
+                TransferOptions = new Azure.Storage.StorageTransferOptions
+                {
+                    // Use parallel uploads for large files
+                    MaximumConcurrency = Environment.ProcessorCount,
+                    InitialTransferSize = 4 * 1024 * 1024, // 4 MB initial transfer size
+                    MaximumTransferSize = 4 * 1024 * 1024  // 4 MB maximum transfer size per operation
+                }
+            };
+            await blobClient.UploadAsync(stream, uploadOptions);
+        }
+        else
+        {
+            // Use simple upload for smaller files
+            await blobClient.UploadAsync(stream, overwrite: true);
+        }
     }
 
     public async Task<bool> BlobExists(string containerName, string blobName)

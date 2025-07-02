@@ -1,9 +1,36 @@
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Get file upload configuration
+var maxFileSizeBytes = builder.Configuration.GetValue<long>("FileUpload:MaxFileSizeBytes", 100 * 1024 * 1024);
+
+// Configure Kestrel server limits for file uploads
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = maxFileSizeBytes;
+});
+
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+
+// Configure form options for file uploads
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = maxFileSizeBytes;
+    options.ValueLengthLimit = int.MaxValue;
+    options.ValueCountLimit = int.MaxValue;
+    options.KeyLengthLimit = int.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
+    options.MultipartBoundaryLengthLimit = int.MaxValue;
+});
+
+// Configure request timeout for large file uploads
+builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+{
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+});
 
 
 // Configure application settings
